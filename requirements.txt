@@ -1,0 +1,10 @@
+# Machine Learning Framework
+tensorflow==2.15.0  # Core library for Keras and Model training
+
+# Data Handling
+pandas>=2.0.0       # For DataFrame manipulation
+numpy>=1.24.0       # For numerical operations and array normalization
+
+# Google Cloud Integration
+google-cloud-bigquery>=3.13.0  # To fetch training data from BigQuery
+db-dtypes>=1.2.0               # Required by Pandas to read BigQuery results correctly
