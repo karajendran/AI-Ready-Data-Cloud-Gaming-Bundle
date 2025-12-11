@@ -2,7 +2,7 @@
 
 This repository contains the infrastructure-as-code and data pipeline scripts for the EVE Online "Data Cloud for Games" demo.
 
-## 📋 Prerequisities
+## Prerequisities
 
 1.  **Google Cloud SDK** installed and authenticated (`gcloud auth application-default login`).
 2.  **Python 3.8+** installed.
@@ -11,7 +11,7 @@ This repository contains the infrastructure-as-code and data pipeline scripts fo
     pip install google-cloud-bigquery google-cloud-storage google-cloud-pubsub apache-beam[gcp]
     ```
 
-## 🚀 Setup Workflow
+## Setup Workflow
 
 ### Step 0: Data Preparation (The Notebook)
 **You must run this first.**
