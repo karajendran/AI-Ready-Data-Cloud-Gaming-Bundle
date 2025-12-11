@@ -13,7 +13,7 @@ This repository contains the infrastructure-as-code and data pipeline scripts fo
 
 ## Setup Workflow
 
-### Step 0: Data Preparation (The Notebook)
+### Step 1: Data Preparation (The Notebook)
 **You must run this first.**
 Open `eve_online_eda_with_visualization.ipynb` in Google Colab or a local Jupyter environment.
 1.  Set your `PROJECT_ID` and `BUCKET_NAME` in the configuration cell.
@@ -22,7 +22,7 @@ Open `eve_online_eda_with_visualization.ipynb` in Google Colab or a local Jupyte
     * `all_ships_vector.csv`
     * `player_ships_vector.csv`
 
-### Step 1: Provision Infrastructure
+### Step 2: Provision Infrastructure
 Run the master setup script to create BigQuery datasets, Pub/Sub topics, and load the static data you just generated.
 
 ```bash
