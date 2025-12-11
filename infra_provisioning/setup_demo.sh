@@ -21,14 +21,14 @@ echo "=========================================="
 
 # 1. Provision Static Data (Dimensions)
 echo "[1/3] Provisioning Static Data..."
-python3 infra_provisioning/provision_static_data.py \
+python3 provision_static_data.py \
     --project_id "$PROJECT_ID" \
     --region "$REGION" \
     --gcs_bucket "$GCS_BUCKET_NAME"
 
 # 2. Provision Streaming Infra (Topic, Sub, Fact Table)
 echo "[2/3] Provisioning Streaming Infrastructure..."
-python3 infra_provisioning/provision_streaming_infra.py \
+python3 provision_streaming_infra.py \
     --project_id "$PROJECT_ID" \
     --region "$REGION"
 
