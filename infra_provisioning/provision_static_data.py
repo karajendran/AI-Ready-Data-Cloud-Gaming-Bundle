@@ -121,12 +121,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--project_id",
-        default=PROJECT_ID,
+        required=True, # Force the user to provide this now
         help="Your GCP project ID."
     )
     parser.add_argument(
         "--region",
-        default=REGION,
+        required=True, # Force the user to provide this now
         help="The GCP region to create resources in (e.g., us-central1)."
     )
     parser.add_argument(
