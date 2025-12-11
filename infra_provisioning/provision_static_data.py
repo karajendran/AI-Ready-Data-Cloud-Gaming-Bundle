@@ -6,13 +6,7 @@ from google.cloud import bigquery
 from google.cloud import storage # Needed for exceptions
 
 # --- Configuration ---
-# !! UPDATE THESE VALUES to match your project and desired resource names !!
-PROJECT_ID = "your-gcp-project-id"  # <-- UPDATE THIS
-REGION = "us-central1"
 BIGQUERY_DATASET_ID = "eve_data_demo"
-
-# --- Feature Vector / Static Data Resources ---
-GCS_STATIC_DATA_BUCKET = "your-gcs_bucket" # <-- UPDATE THIS from eve_online_eda_with_visualization notebook
 
 # Constants for the "All Ships" (raw) vector
 GCS_ALL_SHIPS_CSV = "all_ships_vector.csv"
@@ -88,6 +82,7 @@ def load_table_from_gcs(bq_client, dataset_ref, table_id, gcs_uri):
 
 def main(project_id, region, gcs_bucket):
 
+    # --- Feature Vector / Static Data Resources ---
     GCS_STATIC_DATA_BUCKET = gcs_bucket
 
     # Step 1: Enable APIs (manual step)
@@ -142,10 +137,5 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    if args.project_id == "your-gcp-project-id":
-        print("Error: Please update the PROJECT_ID variable at the top of the script.")
-    elif args.gcs_bucket == "your-gcs_bucket":
-        print("Error: Please update the GCS_STATIC_DATA_BUCKET variable at the top of the script.")
-    else:
-        main(args.project_id, args.region, args.gcs_bucket)
+    main(args.project_id, args.region, args.gcs_bucket)
 
