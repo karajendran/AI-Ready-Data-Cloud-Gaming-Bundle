@@ -10,8 +10,9 @@ from google.cloud import storage
 
 # --- Demo Infrastructure Resources ---
 PUBSUB_TOPIC_ID = "eve-telemetry-stream"
+PUBSUB_SUBSCRIPTION_ID = "eve-telemetry-sub" # Subscription to prevent data loss
 BIGQUERY_DATASET_ID = "eve_data_demo"
-BIGQUERY_FACT_TABLE_ID = "fact_game_events" # RENAMED
+BIGQUERY_FACT_TABLE_ID = "fact_game_events" 
 
 # Schema for the LIVE fact_game_events table
 BIGQUERY_TABLE_SCHEMA = [
@@ -40,10 +41,13 @@ def enable_apis(project_id):
     print("-" * 30)
     input("Press Enter to continue after you have enabled the APIs...")
 
-def create_gcs_bucket(bucket_name, location):
+def create_gcs_bucket(project_id, bucket_name, location):
     """Creates a GCS bucket for Dataflow staging."""
     print(f"Attempting to create GCS bucket: {bucket_name}...")
-    storage_client = storage.Client()
+    
+    # Explicitly pass project_id to ensure bucket belongs to the correct project
+    storage_client = storage.Client(project=project_id)
+    
     try:
         bucket = storage_client.create_bucket(bucket_name, location=location)
         print(f"Successfully created GCS bucket: {bucket.name}")
@@ -64,6 +68,24 @@ def create_pubsub_topic(project_id, topic_id):
         print(f"Pub/Sub topic '{topic_id}' already exists.")
     except Exception as e:
         print(f"Error creating Pub/Sub topic: {e}")
+
+def create_pubsub_subscription(project_id, topic_id, subscription_id):
+    """Creates a Pub/Sub subscription for the topic."""
+    print(f"Attempting to create Pub/Sub subscription: {subscription_id}...")
+    subscriber = pubsub_v1.SubscriberClient()
+    topic_path = subscriber.topic_path(project_id, topic_id)
+    subscription_path = subscriber.subscription_path(project_id, subscription_id)
+
+    try:
+        # Check if subscription exists by attempting to create it
+        subscription = subscriber.create_subscription(
+            request={"name": subscription_path, "topic": topic_path}
+        )
+        print(f"Successfully created Pub/Sub subscription: {subscription.name}")
+    except exceptions.AlreadyExists:
+        print(f"Pub/Sub subscription '{subscription_id}' already exists.")
+    except Exception as e:
+        print(f"Error creating Pub/Sub subscription: {e}")
 
 def create_bigquery_dataset(project_id, dataset_id, location):
     """Creates a BigQuery dataset if it doesn't exist."""
@@ -100,14 +122,17 @@ def create_bigquery_table(bq_client, dataset_ref, table_id, schema):
 def main(project_id, region):
     
     GCS_STAGING_BUCKET = f"{project_id}-dataflow-staging" # Bucket names must be globally unique
+
     # Step 1: Enable APIs (manual step)
     enable_apis(project_id)
     
     # Step 2: Create GCS Bucket for Dataflow staging
-    create_gcs_bucket(GCS_STAGING_BUCKET, region)
+    # FIX: Passed project_id here
+    create_gcs_bucket(project_id, GCS_STAGING_BUCKET, region)
     
-    # Step 3: Create Pub/Sub Topic
+    # Step 3: Create Pub/Sub Topic AND Subscription
     create_pubsub_topic(project_id, PUBSUB_TOPIC_ID)
+    create_pubsub_subscription(project_id, PUBSUB_TOPIC_ID, PUBSUB_SUBSCRIPTION_ID)
     
     # Step 4: Create BigQuery Dataset
     bq_client = bigquery.Client(project=project_id)
@@ -123,6 +148,7 @@ def main(project_id, region):
     print("\n--- Streaming Infrastructure Provisioning Complete ---")
     print(f"Staging Bucket: {GCS_STAGING_BUCKET}")
     print(f"Pub/Sub Topic: {PUBSUB_TOPIC_ID}")
+    print(f"Pub/Sub Subscription: {PUBSUB_SUBSCRIPTION_ID}")
     print(f"BigQuery Dataset: {BIGQUERY_DATASET_ID}")
     print(f"BigQuery Fact Table: {BIGQUERY_FACT_TABLE_ID}")
 
