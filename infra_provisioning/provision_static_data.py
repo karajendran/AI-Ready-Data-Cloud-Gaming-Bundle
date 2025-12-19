@@ -4,6 +4,7 @@ import argparse
 from google.api_core import exceptions
 from google.cloud import bigquery
 from google.cloud import storage # Needed for exceptions
+import subprocess
 
 # --- Configuration ---
 BIGQUERY_DATASET_ID = "eve_data_demo"
@@ -16,19 +17,24 @@ ALL_SHIPS_TABLE_ID = "dim_all_ships_features"
 GCS_PLAYER_SHIPS_CSV = "player_ships_vector.csv"
 PLAYER_SHIPS_TABLE_ID = "dim_player_ships_features"
 
-
 def enable_apis(project_id):
     """
-    Prints the gcloud commands to enable necessary APIs.
+    Automatically enables necessary APIs using gcloud.
     """
-    print("--- Enabling APIs ---")
-    print("Please run the following gcloud command from your terminal:")
-    print(f"gcloud services enable \\")
-    print(f"  bigquery.googleapis.com \\")
-    print(f"  storage-component.googleapis.com \\")
-    print(f"  --project={project_id}")
-    print("-" * 30)
-    input("Press Enter to continue after you have enabled the APIs...")
+    services = [
+        "bigquery.googleapis.com",
+        "storage-component.googleapis.com"
+    ]
+    
+    print(f"--- Enabling APIs: {', '.join(services)} ---")
+    try:
+        subprocess.check_call([
+            "gcloud", "services", "enable", *services, f"--project={project_id}"
+        ])
+        print("APIs enabled successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error enabling APIs. Please ensure you are logged in (gcloud auth login). Error: {e}")
+        exit(1)
 
 def create_bigquery_dataset(project_id, dataset_id, location):
     """Creates a BigQuery dataset if it doesn't exist."""

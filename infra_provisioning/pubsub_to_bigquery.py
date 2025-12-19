@@ -69,7 +69,7 @@ def run(project_id, subscription_id, dataset_id, table_id, gcs_staging_bucket, r
     with beam.Pipeline(options=options) as p:
         
         (p
-         # FIX: Read from the permanent subscription we created
+         # Read from the permanent subscription we created
          | "1. Read from Pub/Sub" >> beam.io.ReadFromPubSub(subscription=subscription_path)
          | "2. Parse JSON Message" >> beam.ParDo(ParsePubSubMessage())
          | "3. Write to BigQuery" >> beam.io.WriteToBigQuery(
@@ -91,6 +91,10 @@ if __name__ == "__main__":
     parser.add_argument("--gcs_staging_bucket", required=True, help="GCS bucket for Dataflow staging.")
     parser.add_argument("--region", required=True, help="GCP region (e.g., us-central1).")
     
+    # --- Network Configuration Arguments ---
+    parser.add_argument("--network", help="GCP VPC network name (optional).")
+    parser.add_argument("--subnetwork", help="GCP VPC subnetwork name (optional).")
+    
     known_args, pipeline_args = parser.parse_known_args()
     
     # Add standard Dataflow runner arguments
@@ -105,9 +109,15 @@ if __name__ == "__main__":
         "--job_name=eve-telemetry-pipeline"
     ])
 
+    # --- ADDED: Append Network args if provided ---
+    if known_args.network:
+        pipeline_args.append(f"--network={known_args.network}")
+    if known_args.subnetwork:
+        pipeline_args.append(f"--subnetwork={known_args.subnetwork}")
+
     run(
         project_id=known_args.project_id,
-        subscription_id=known_args.subscription_id, # Pass sub ID
+        subscription_id=known_args.subscription_id, 
         dataset_id=known_args.dataset_id,
         table_id=known_args.table_id,
         gcs_staging_bucket=known_args.gcs_staging_bucket,
