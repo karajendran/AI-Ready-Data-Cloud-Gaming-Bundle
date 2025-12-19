@@ -17,25 +17,6 @@ ALL_SHIPS_TABLE_ID = "dim_all_ships_features"
 GCS_PLAYER_SHIPS_CSV = "player_ships_vector.csv"
 PLAYER_SHIPS_TABLE_ID = "dim_player_ships_features"
 
-def enable_apis(project_id):
-    """
-    Automatically enables necessary APIs using gcloud.
-    """
-    services = [
-        "bigquery.googleapis.com",
-        "storage-component.googleapis.com"
-    ]
-    
-    print(f"--- Enabling APIs: {', '.join(services)} ---")
-    try:
-        subprocess.check_call([
-            "gcloud", "services", "enable", *services, f"--project={project_id}"
-        ])
-        print("APIs enabled successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error enabling APIs. Please ensure you are logged in (gcloud auth login). Error: {e}")
-        exit(1)
-
 def create_bigquery_dataset(project_id, dataset_id, location):
     """Creates a BigQuery dataset if it doesn't exist."""
     print(f"Attempting to create BigQuery dataset: {dataset_id}...")
@@ -91,9 +72,6 @@ def main(project_id, region, gcs_bucket):
     # --- Feature Vector / Static Data Resources ---
     GCS_STATIC_DATA_BUCKET = gcs_bucket
 
-    # Step 1: Enable APIs (manual step)
-    enable_apis(project_id)
-    
     # Step 2: Create BigQuery Dataset
     bq_client = bigquery.Client(project=project_id)
     dataset_ref = create_bigquery_dataset(project_id, BIGQUERY_DATASET_ID, region)

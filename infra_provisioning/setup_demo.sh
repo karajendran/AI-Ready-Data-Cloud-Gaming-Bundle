@@ -20,25 +20,60 @@ REGION="us-central1"
 
 # --- NETWORK CONFIGURATION (UPDATE THESE IF NEEDED) ---
 NETWORK_NAME="default" 
-SUBNETWORK_NAME="" # Leave empty if not using a specific subnet (e.g., regions/us-central1/subnetworks/my-subnet)
+SUBNETWORK_NAME="" 
 
 # Derived Configuration
 GCS_STAGING_BUCKET="${PROJECT_ID}-dataflow-staging"
 SUBSCRIPTION_ID="eve-telemetry-sub"
 DATASET_ID="eve_data_demo"
 FACT_TABLE_ID="fact_game_events"
+SA_NAME="game-dataflow-sa" # Service Account Name
 
 # Stop script on any error
 set -e
 
 echo "=========================================="
-echo "   EVE ONLINE DEMO - INFRA SETUP        "
-echo "   Project: $PROJECT_ID                 "
-echo "   Bucket:  $GCS_BUCKET_NAME            "
-echo "   Network: ${NETWORK_NAME:-Default}    "
+echo "    EVE ONLINE DEMO - INFRA SETUP         "
+echo "    Project: $PROJECT_ID                  "
+echo "    Bucket:  $GCS_BUCKET_NAME             "
 echo "=========================================="
 
-# --- 2. Check File Locations ---
+echo ""
+echo "[0/3] Enabling APIs & Configuring IAM..."
+
+# 1. Enable ALL required APIs (Supersedes the checks in Python scripts)
+gcloud config set project $PROJECT_ID
+gcloud services enable \
+    dataflow.googleapis.com \
+    compute.googleapis.com \
+    logging.googleapis.com \
+    storage-component.googleapis.com \
+    bigquery.googleapis.com \
+    pubsub.googleapis.com \
+    aiplatform.googleapis.com \
+    iam.googleapis.com
+
+# 2. Create Service Account for Dataflow (Security Best Practice)
+SA_EMAIL="$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
+
+if ! gcloud iam service-accounts list --filter="email:$SA_EMAIL" --format="value(email)" | grep -q "$SA_EMAIL"; then
+    gcloud iam service-accounts create $SA_NAME \
+        --display-name="Game Dataflow SA"
+    echo "✅ Service Account created: $SA_EMAIL"
+else
+    echo "⚠️ Service Account exists. Skipping creation."
+fi
+
+# 3. Grant Permissions
+echo "🔑 Granting IAM Roles..."
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/dataflow.worker" --condition=None > /dev/null 2>&1 || true
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/dataflow.developer" --condition=None > /dev/null 2>&1 || true
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/bigquery.dataEditor" --condition=None > /dev/null 2>&1 || true
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/bigquery.jobUser" --condition=None > /dev/null 2>&1 || true
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/pubsub.subscriber" --condition=None > /dev/null 2>&1 || true
+gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/storage.objectAdmin" --condition=None > /dev/null 2>&1 || true
+
+# --- Check File Locations ---
 if [ -f "infra_provisioning/provision_static_data.py" ]; then
     PATH_PREFIX="infra_provisioning/"
 else
@@ -74,8 +109,13 @@ else
     then
         echo "Deploying Dataflow Pipeline..."
         
-        # We pass the network args. If variables are empty string "", 
-        # the Python script's logic (if args.network:) will correctly ignore them.
+        # Ensure Staging Bucket Exists (Dataflow needs this before running)
+        if ! gcloud storage ls gs://$GCS_STAGING_BUCKET > /dev/null 2>&1; then
+            echo "🪣 Creating Staging Bucket: gs://$GCS_STAGING_BUCKET"
+            gcloud storage buckets create gs://$GCS_STAGING_BUCKET --location=$REGION
+        fi
+
+        # Pass the created Service Account to the pipeline
         python3 "$PIPELINE_SCRIPT" \
             --project_id "$PROJECT_ID" \
             --subscription_id "$SUBSCRIPTION_ID" \
@@ -84,7 +124,8 @@ else
             --gcs_staging_bucket "$GCS_STAGING_BUCKET" \
             --region "$REGION" \
             --network "$NETWORK_NAME" \
-            --subnetwork "$SUBNETWORK_NAME"
+            --subnetwork "$SUBNETWORK_NAME" \
+            --service_account_email "$SA_EMAIL" 
     else
         echo "Skipping pipeline deployment."
     fi
@@ -92,6 +133,6 @@ fi
 
 echo ""
 echo "=========================================="
-echo "   SETUP COMPLETE                         "
+echo "    SETUP COMPLETE                        "
 echo "=========================================="
 

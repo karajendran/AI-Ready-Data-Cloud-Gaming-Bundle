@@ -27,26 +27,6 @@ BIGQUERY_TABLE_SCHEMA = [
     bigquery.SchemaField("is_buy_order", "BOOLEAN", mode="NULLABLE"),
 ]
 
-def enable_apis(project_id):
-    """
-    Automatically enables necessary APIs using gcloud.
-    """
-    services = [
-        "pubsub.googleapis.com",
-        "dataflow.googleapis.com",
-        "bigquery.googleapis.com",
-        "storage-component.googleapis.com"
-    ]
-    
-    print(f"--- Enabling APIs: {', '.join(services)} ---")
-    try:
-        subprocess.check_call([
-            "gcloud", "services", "enable", *services, f"--project={project_id}"
-        ])
-        print("APIs enabled successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error enabling APIs. Please ensure you are logged in (gcloud auth login). Error: {e}")
-        exit(1)
 
 def create_gcs_bucket(project_id, bucket_name, location):
     """Creates a GCS bucket for Dataflow staging."""
@@ -129,12 +109,8 @@ def create_bigquery_table(bq_client, dataset_ref, table_id, schema):
 def main(project_id, region):
     
     GCS_STAGING_BUCKET = f"{project_id}-dataflow-staging" # Bucket names must be globally unique
-
-    # Step 1: Enable APIs (manual step)
-    enable_apis(project_id)
     
     # Step 2: Create GCS Bucket for Dataflow staging
-    # FIX: Passed project_id here
     create_gcs_bucket(project_id, GCS_STAGING_BUCKET, region)
     
     # Step 3: Create Pub/Sub Topic AND Subscription
