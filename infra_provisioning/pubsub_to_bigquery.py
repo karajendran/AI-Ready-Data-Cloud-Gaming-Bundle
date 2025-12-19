@@ -1,6 +1,7 @@
 import argparse
 import logging
 import json
+import time
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 from apache_beam.options.pipeline_options import SetupOptions
@@ -99,16 +100,18 @@ if __name__ == "__main__":
     # Add standard Dataflow runner arguments
     # We construct the temp_location here so it's consistent
     temp_location = f"gs://{known_args.gcs_staging_bucket}/temp"
-    
+   
+    job_name = f"eve-telemetry-pipeline-{int(time.time())}"
+
     pipeline_args.extend([
         f"--runner=DataflowRunner",
         f"--project={known_args.project_id}",
         f"--region={known_args.region}",
         f"--temp_location={temp_location}",
-        "--job_name=eve-telemetry-pipeline"
+        f"--job_name={job_name}" 
     ])
 
-    # --- ADDED: Append Network args if provided ---
+    # --- Append Network args if provided ---
     if known_args.network:
         pipeline_args.append(f"--network={known_args.network}")
     if known_args.subnetwork:
