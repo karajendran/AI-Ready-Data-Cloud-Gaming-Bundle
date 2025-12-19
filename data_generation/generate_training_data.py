@@ -8,7 +8,7 @@ from google.cloud import bigquery
 # --- Configuration ---
 OUTPUT_FILENAME = "eve_24h_history.jsonl"
 DATASET_ID = "eve_data_demo"
-TABLE_ID = "game_events" 
+TABLE_ID = "fact_game_events" 
 DIM_TABLE_ID = "dim_player_ships_features"
 
 # Anomaly Settings (Triggered 2 hours ago, lasts 1 hour)
