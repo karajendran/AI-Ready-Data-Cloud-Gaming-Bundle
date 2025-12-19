@@ -8,25 +8,28 @@ from google.cloud import bigquery
 # --- Configuration ---
 OUTPUT_FILENAME = "eve_24h_history.jsonl"
 DATASET_ID = "eve_data_demo"
-TABLE_ID = "fact_game_events" 
-DIM_TABLE_ID = "dim_player_ships_features"
+TABLE_ID = "fact_game_events" # Target Table
+DIM_TABLE_ID = "dim_player_ships_features" # Source for realistic items
 
 # Anomaly Settings (Triggered 2 hours ago, lasts 1 hour)
 ANOMALY_DURATION_MINS = 60 
 
 def load_foundational_data(client, project_id):
-    """Fetches real items/prices from BQ."""
+    """Fetches real items/prices from BQ to ensure data realism."""
     print("Fetching item definitions from BigQuery...")
     try:
+        # We grab 50 random items to simulate a market
         query = f"""
             SELECT ship_typeID as item_id, basePrice as average_price
             FROM `{project_id}.{DATASET_ID}.{DIM_TABLE_ID}`
             LIMIT 50
         """
         results = [dict(row) for row in client.query(query).result()]
-        return results if results else [{"item_id": 34, "average_price": 5.0}]
+        if not results:
+            raise Exception("No data returned")
+        return results
     except Exception as e:
-        print(f"⚠️ Warning: Using defaults. ({e})")
+        print(f"⚠️ Warning: Could not fetch real items ({e}). Using defaults.")
         return [{"item_id": 34, "average_price": 5.0}, {"item_id": 29668, "average_price": 3000000.0}]
 
 def generate_file(project_id, days=1):
@@ -46,16 +49,16 @@ def generate_file(project_id, days=1):
     row_count = 0
     
     with open(OUTPUT_FILENAME, 'w') as f:
-        # CRITICAL CHANGE: Loop by MINUTE, not by event
-        # This ensures we control the 'Density' (Events per Minute)
+        # Loop Minute-by-Minute to control Velocity (Events per Minute)
         while current_time < end_time:
             timestamp_str = current_time.strftime('%Y-%m-%d %H:%M:%S UTC')
             
             # ---------------------------------------------------------
             # 1. SCENARIO: Background Noise (Normal Traders)
             # Signature: Low APM (5-20), Variance in items
+            # Target Cluster: 3, 4, 5
             # ---------------------------------------------------------
-            if random.random() < 0.9: 
+            if random.random() < 0.9: # Happens 90% of the time
                 for _ in range(random.randint(5, 20)):
                     item = random.choice(items)
                     row = {
@@ -74,17 +77,18 @@ def generate_file(project_id, days=1):
             # ---------------------------------------------------------
             # 2. SCENARIO: Industrial Bursts (Multiboxing Fleets)
             # Signature: Medium APM (~60), HIGH Quantity, Specific Items
+            # Target Cluster: 1 (Safe High-Volume User)
             # ---------------------------------------------------------
-            if random.random() < 0.15: 
-                # Loop 60 times within THIS SAME MINUTE
+            if random.random() < 0.15: # Happens 15% of the time
+                # Loop 60 times to simulate ~1 action/sec (Multiboxing limit)
                 for _ in range(60): 
                     row = {
                         "event_timestamp": timestamp_str,
                         "event_type": "manufacturing_job",
                         "player_id": "Industrial_Corp_01",
                         "location_id": 60003760,
-                        "item_id": 34, # Tritanium
-                        "quantity": random.randint(10000, 50000), 
+                        "item_id": 34, # Tritanium (Common Mineral)
+                        "quantity": random.randint(10000, 50000), # HUGE Volume
                         "price_per_item": 5.0,
                         "is_buy_order": True
                     }
@@ -94,10 +98,11 @@ def generate_file(project_id, days=1):
             # ---------------------------------------------------------
             # 3. SCENARIO: The Anomaly (Exploit / Flooding)
             # Signature: EXTREME APM (2500+), Low Value, Single Player
+            # Target Cluster: 2 (The Bad Guy)
             # ---------------------------------------------------------
             if current_time > anomaly_start and random.random() < 0.2:
                 print(f"⚠️  Injecting Exploit Burst at {timestamp_str}")
-                # Loop 2500 times within THIS SAME MINUTE
+                # Loop 2500 times in ONE timestamp (Impossible speed)
                 for _ in range(2500): 
                     row = {
                         "event_timestamp": timestamp_str,
@@ -122,9 +127,22 @@ def load_to_bigquery(client, project_id):
     table_ref = f"{project_id}.{DATASET_ID}.{TABLE_ID}"
     print(f"🚀 Loading {OUTPUT_FILENAME} into {table_ref}...")
 
+    # Explicit schema to match the table definition
+    # This prevents the 'REQUIRED vs NULLABLE' mismatch error
+    schema = [
+        bigquery.SchemaField("event_timestamp", "TIMESTAMP", mode="REQUIRED"),
+        bigquery.SchemaField("event_type", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("player_id", "STRING", mode="NULLABLE"),
+        bigquery.SchemaField("location_id", "INTEGER", mode="NULLABLE"),
+        bigquery.SchemaField("item_id", "INTEGER", mode="NULLABLE"),
+        bigquery.SchemaField("quantity", "INTEGER", mode="NULLABLE"),
+        bigquery.SchemaField("price_per_item", "FLOAT", mode="NULLABLE"),
+        bigquery.SchemaField("is_buy_order", "BOOLEAN", mode="NULLABLE"),
+    ]
+
     job_config = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
-        autodetect=True, 
+        schema=schema, # Use explicit schema instead of autodetect
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND
     )
 
