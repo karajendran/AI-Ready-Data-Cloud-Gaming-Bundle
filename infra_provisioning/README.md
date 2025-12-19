@@ -28,4 +28,6 @@ Run the master setup script to create BigQuery datasets, Pub/Sub topics, and loa
 ```bash
 chmod +x setup_demo.sh
 ./setup_demo.sh <YOUR_PROJECT_ID> <YOUR_BUCKET_NAME>
+```
 
+When prompted to deploy the Dataflow pipeline, say Yes (y) for the full streaming demo.
