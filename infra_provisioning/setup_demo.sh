@@ -4,7 +4,6 @@
 # EVE ONLINE DEMO - MASTER SETUP SCRIPT
 # ==============================================================================
 # Usage: ./setup_demo.sh <PROJECT_ID> <GCS_BUCKET_NAME>
-# Example: ./setup_demo.sh accelerated-platforms-dev my-sde-bucket
 # ==============================================================================
 
 # --- 1. Validation ---
@@ -17,9 +16,10 @@ fi
 PROJECT_ID=$1
 GCS_BUCKET_NAME=$2
 REGION="us-central1"
+START_TIME=$(date +%s)
 
-# --- NETWORK CONFIGURATION (UPDATE THESE IF NEEDED) ---
-NETWORK_NAME="default" 
+# --- NETWORK CONFIGURATION ---
+NETWORK_NAME="dataflow-network" #UPDATE this if your network is different 
 SUBNETWORK_NAME="" 
 
 # Derived Configuration
@@ -27,7 +27,7 @@ GCS_STAGING_BUCKET="${PROJECT_ID}-dataflow-staging"
 SUBSCRIPTION_ID="eve-telemetry-sub"
 DATASET_ID="eve_data_demo"
 FACT_TABLE_ID="fact_game_events"
-SA_NAME="game-dataflow-sa" # Service Account Name
+SA_NAME="game-dataflow-sa"
 
 # Stop script on any error
 set -e
@@ -35,13 +35,12 @@ set -e
 echo "=========================================="
 echo "    EVE ONLINE DEMO - INFRA SETUP         "
 echo "    Project: $PROJECT_ID                  "
-echo "    Bucket:  $GCS_BUCKET_NAME             "
 echo "=========================================="
 
 echo ""
-echo "[0/3] Enabling APIs & Configuring IAM..."
+echo "[0/5] Enabling APIs & Configuring IAM..."
 
-# 1. Enable ALL required APIs (Supersedes the checks in Python scripts)
+# 1. Enable APIs
 gcloud config set project $PROJECT_ID
 gcloud services enable \
     dataflow.googleapis.com \
@@ -53,18 +52,18 @@ gcloud services enable \
     aiplatform.googleapis.com \
     iam.googleapis.com
 
-# 2. Create Service Account for Dataflow (Security Best Practice)
-SA_EMAIL="$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
+echo "✅ APIs enabled successfully."
 
+# 2. Create Service Account
+SA_EMAIL="$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
 if ! gcloud iam service-accounts list --filter="email:$SA_EMAIL" --format="value(email)" | grep -q "$SA_EMAIL"; then
-    gcloud iam service-accounts create $SA_NAME \
-        --display-name="Game Dataflow SA"
-    echo "✅ Service Account created: $SA_EMAIL"
+    gcloud iam service-accounts create $SA_NAME --display-name="Game Dataflow SA"
+    echo "✅ Service Account created."
 else
-    echo "⚠️ Service Account exists. Skipping creation."
+    echo "⚠️ Service Account exists."
 fi
 
-# 3. Grant Permissions
+# 3. Grant Permissions (Blindly add bindings to ensure they exist)
 echo "🔑 Granting IAM Roles..."
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/dataflow.worker" --condition=None > /dev/null 2>&1 || true
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/dataflow.developer" --condition=None > /dev/null 2>&1 || true
@@ -73,7 +72,8 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/pubsub.subscriber" --condition=None > /dev/null 2>&1 || true
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/storage.objectAdmin" --condition=None > /dev/null 2>&1 || true
 
-# --- Check File Locations ---
+# --- Path Handling ---
+# Handles if scripts are in root or infra_provisioning/
 if [ -f "infra_provisioning/provision_static_data.py" ]; then
     PATH_PREFIX="infra_provisioning/"
 else
@@ -82,7 +82,7 @@ fi
 
 # --- 3. Provision Static Data ---
 echo ""
-echo "[1/3] Provisioning Static Data..."
+echo "[1/5] Provisioning Static Data..."
 python3 "${PATH_PREFIX}provision_static_data.py" \
     --project_id "$PROJECT_ID" \
     --region "$REGION" \
@@ -90,18 +90,44 @@ python3 "${PATH_PREFIX}provision_static_data.py" \
 
 # --- 4. Provision Streaming Infra ---
 echo ""
-echo "[2/3] Provisioning Streaming Infrastructure..."
+echo "[2/5] Provisioning Streaming Infrastructure..."
+# This creates the empty 'fact_game_events' table
 python3 "${PATH_PREFIX}provision_streaming_infra.py" \
     --project_id "$PROJECT_ID" \
     --region "$REGION"
 
-# --- 5. Deploy Pipeline ---
+# --- 5. Data Generation (Moved Up) ---
 echo ""
-echo "[3/3] Pipeline Deployment..."
+echo "[3/5] Generating Training Data (History)..."
+# Check common locations for the generator script
+GEN_SCRIPT=""
+if [ -f "generate_training_data.py" ]; then GEN_SCRIPT="generate_training_data.py"; fi
+if [ -f "data_generation/generate_training_data.py" ]; then GEN_SCRIPT="data_generation/generate_training_data.py"; fi
+
+if [ -n "$GEN_SCRIPT" ]; then
+    echo "Generating 24h of synthetic history to train the model..."
+    python3 "$GEN_SCRIPT" --project_id "$PROJECT_ID"
+else
+    echo "⚠️ generate_training_data.py not found. Skipping data generation."
+fi
+
+# --- 6. Feature Engineering (Moved Down) ---
+echo ""
+echo "[4/5] Creating Feature Engineering Views..."
+# This creates 'stats_per_minute' view based on the schema of fact_game_events
+if [ -f "feature_engineering.py" ]; then
+    python3 feature_engineering.py --project_id "$PROJECT_ID"
+else
+    echo "⚠️ feature_engineering.py not found. Skipping."
+fi
+
+# --- 7. Deploy Pipeline ---
+echo ""
+echo "[5/5] Pipeline Deployment..."
 PIPELINE_SCRIPT="pubsub_to_bigquery.py"
 
 if [ ! -f "$PIPELINE_SCRIPT" ]; then
-    echo "Warning: $PIPELINE_SCRIPT not found in current directory. Skipping deployment."
+    echo "Warning: $PIPELINE_SCRIPT not found. Skipping deployment."
 else
     read -p "Do you want to deploy the Dataflow Pipeline now? (y/n) " -n 1 -r
     echo ""
@@ -109,13 +135,11 @@ else
     then
         echo "Deploying Dataflow Pipeline..."
         
-        # Ensure Staging Bucket Exists (Dataflow needs this before running)
         if ! gcloud storage ls gs://$GCS_STAGING_BUCKET > /dev/null 2>&1; then
             echo "🪣 Creating Staging Bucket: gs://$GCS_STAGING_BUCKET"
             gcloud storage buckets create gs://$GCS_STAGING_BUCKET --location=$REGION
         fi
 
-        # Pass the created Service Account to the pipeline
         python3 "$PIPELINE_SCRIPT" \
             --project_id "$PROJECT_ID" \
             --subscription_id "$SUBSCRIPTION_ID" \
@@ -131,8 +155,14 @@ else
     fi
 fi
 
+
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
 echo ""
-echo "=========================================="
-echo "    SETUP COMPLETE                        "
-echo "=========================================="
+echo "========================================================="
+echo "    SETUP COMPLETE                                       "
+echo "    Total Time: $(($DURATION / 60))m $(($DURATION % 60))s"
+echo "========================================================="
+
 
