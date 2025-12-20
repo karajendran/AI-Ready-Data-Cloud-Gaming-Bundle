@@ -4,11 +4,11 @@
 # EVE ONLINE DEMO - RUN SHOWCASE
 # ==============================================================================
 # 1. Trains the K-Means Anomaly Detection Model
-# 2. Launches the GenAI Security Agent
+# 2. Launches the GenAI Security Agent (Google ADK)
 # Usage: ./run_demo.sh <PROJECT_ID>
 # ==============================================================================
 
-if [ "$#" -ne 1 ]; then
+if [ "$#" -lt 1 ]; then
     echo "Error: Missing arguments."
     echo "Usage: $0 <PROJECT_ID>"
     exit 1
@@ -16,14 +16,13 @@ fi
 
 PROJECT_ID=$1
 
-START_TIME=$(date +%s)
-
 # Stop on error
 set -e
 
 echo "=========================================="
 echo "    🚀 STARTING LIVE DEMO                 "
 echo "    Project: $PROJECT_ID"
+echo "    Agent:   Google ADK"
 echo "=========================================="
 
 # --- 1. Train Model ---
@@ -37,26 +36,39 @@ else
     exit 1
 fi
 
-# --- 2. Run Agent ---
+# --- 2. Run Agent (ADK) ---
 echo ""
-echo "[2/2] Launching Vertex AI Security Agent..."
-echo "      (Type your questions in the prompt below)"
+echo "[2/2] Launching Security Agent (ADK)..."
+echo "      (Type 'exit' to quit)"
 echo "---------------------------------------------------"
-if [ -f "game_security_agent.py" ]; then
-    # We use python3 -u to unbuffer output so you see logs instantly
-    python3 -u game_security_agent.py --project_id "$PROJECT_ID"
-else
-    echo "❌ Error: game_agent_native.py not found."
+
+# Check if ADK is installed
+if ! pip show google-adk > /dev/null 2>&1; then
+    echo "⚠️  Google ADK not found. Installing..."
+    pip install google-adk
+fi
+
+# Check for agent directory
+if [ ! -d "adk_agent" ]; then
+    echo "❌ Error: 'adk_agent/' directory not found."
     exit 1
 fi
 
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
+# --- DYNAMIC CONFIGURATION ---
+# We write the .env file dynamically to ensure it matches the CLI argument
+echo "📝 Configuring adk_agent/.env for Project: $PROJECT_ID..."
+cat > adk_agent/.env <<EOF
+GOOGLE_GENAI_USE_VERTEXAI=TRUE
+GOOGLE_CLOUD_PROJECT=$PROJECT_ID
+GOOGLE_CLOUD_LOCATION=us-central1
+EOF
+
+# Run using the ADK CLI
+# The CLI will automatically pick up the .env we just wrote
+adk run adk_agent
 
 echo ""
-echo "========================================================="
-echo "    ✅ DEMO COMPLETE                                     "
-echo "    Total Time: $(($DURATION / 60))m $(($DURATION % 60))s"
-echo "========================================================="
-
+echo "=========================================="
+echo "    ✅ DEMO COMPLETE"
+echo "=========================================="
 
