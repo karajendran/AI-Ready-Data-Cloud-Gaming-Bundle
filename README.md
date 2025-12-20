@@ -53,15 +53,28 @@ Before running either approach, you must establish the Feature Store.
 ## 5. Run Approach 1: Batch Analytics (BQML)
 
 Located in: *01_approach_batch_bqml/*
-
 Philosophy: "Bring the AI to the Data." We run unsupervised clustering directly inside the Data Warehouse.
 
-1. Train the Model (SQL):
-Run `train_kmeans.sql` in BigQuery. This creates the `behavior_anomaly_model` and identifies the "Bot Cluster" (e.g., Cluster 2).
-2. Run the Agent:
-The Agent queries BigQuery to find anomalies and uses the K-Means centroids to explain them.
+### End-to-End Execution Guide
+
+Follow these commands to provision, run the demo, and teardown resources.
+
 ```
-python 01_approach_batch_bqml/agent_sql_analyst.py
+# 1. Setup (Infrastructure & Data)
+cd infra_provisioning/
+chmod +x setup_demo.sh
+./setup_demo.sh <PROJECT_ID> <GCS_BUCKET_NAME>
+
+# 2. Run Demo (Model & Agent)
+cd ../01_approach_batch_bqml/
+chmod +x run_demo.sh
+./run_demo.sh <PROJECT_ID>
+
+# 3. Teardown (Cleanup)
+cd ../infra_provisioning/
+chmod +x teardown_demo.sh
+./teardown_demo.sh <PROJECT_ID> <GCS_BUCKET_NAME>
+
 ```
 
 
