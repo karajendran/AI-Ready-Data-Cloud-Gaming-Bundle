@@ -19,7 +19,7 @@ REGION="us-central1"
 START_TIME=$(date +%s)
 
 # --- NETWORK CONFIGURATION ---
-NETWORK_NAME="dataflow-network" #UPDATE this if your network is different 
+NETWORK_NAME="default" 
 SUBNETWORK_NAME="" 
 
 # Derived Configuration
@@ -34,11 +34,12 @@ set -e
 
 echo "=========================================="
 echo "    EVE ONLINE DEMO - INFRA SETUP         "
-echo "    Project: $PROJECT_ID                  "
+echo "    Start Time: $(date)"
+echo "    Project:    $PROJECT_ID"
 echo "=========================================="
 
 echo ""
-echo "[0/5] Enabling APIs & Configuring IAM..."
+echo "[$(date +%T)] [0/5] Enabling APIs & Configuring IAM..."
 
 # 1. Enable APIs
 gcloud config set project $PROJECT_ID
@@ -52,19 +53,19 @@ gcloud services enable \
     aiplatform.googleapis.com \
     iam.googleapis.com
 
-echo "✅ APIs enabled successfully."
+echo "[$(date +%T)] ✅ APIs enabled successfully."
 
 # 2. Create Service Account
 SA_EMAIL="$SA_NAME@$PROJECT_ID.iam.gserviceaccount.com"
 if ! gcloud iam service-accounts list --filter="email:$SA_EMAIL" --format="value(email)" | grep -q "$SA_EMAIL"; then
     gcloud iam service-accounts create $SA_NAME --display-name="Game Dataflow SA"
-    echo "✅ Service Account created."
+    echo "[$(date +%T)] ✅ Service Account created."
 else
-    echo "⚠️ Service Account exists."
+    echo "[$(date +%T)] ⚠️ Service Account exists."
 fi
 
 # 3. Grant Permissions (Blindly add bindings to ensure they exist)
-echo "🔑 Granting IAM Roles..."
+echo "[$(date +%T)] 🔑 Granting IAM Roles..."
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/dataflow.worker" --condition=None > /dev/null 2>&1 || true
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/dataflow.developer" --condition=None > /dev/null 2>&1 || true
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/bigquery.dataEditor" --condition=None > /dev/null 2>&1 || true
@@ -72,8 +73,12 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/pubsub.subscriber" --condition=None > /dev/null 2>&1 || true
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/storage.objectAdmin" --condition=None > /dev/null 2>&1 || true
 
+# --- FIX: Wait for IAM Propagation ---
+echo "[$(date +%T)] ⏳ Sleeping 60s to allow IAM permissions to propagate..."
+sleep 60
+echo "[$(date +%T)] ✅ IAM Propagation likely complete."
+
 # --- Path Handling ---
-# Handles if scripts are in root or infra_provisioning/
 if [ -f "infra_provisioning/provision_static_data.py" ]; then
     PATH_PREFIX="infra_provisioning/"
 else
@@ -82,7 +87,7 @@ fi
 
 # --- 3. Provision Static Data ---
 echo ""
-echo "[1/5] Provisioning Static Data..."
+echo "[$(date +%T)] [1/5] Provisioning Static Data..."
 python3 "${PATH_PREFIX}provision_static_data.py" \
     --project_id "$PROJECT_ID" \
     --region "$REGION" \
@@ -90,16 +95,14 @@ python3 "${PATH_PREFIX}provision_static_data.py" \
 
 # --- 4. Provision Streaming Infra ---
 echo ""
-echo "[2/5] Provisioning Streaming Infrastructure..."
-# This creates the empty 'fact_game_events' table
+echo "[$(date +%T)] [2/5] Provisioning Streaming Infrastructure..."
 python3 "${PATH_PREFIX}provision_streaming_infra.py" \
     --project_id "$PROJECT_ID" \
     --region "$REGION"
 
-# --- 5. Data Generation ---
+# --- 5. Data Generation (Step 3 - Moved UP) ---
 echo ""
-echo "[3/5] Generating Training Data (History)..."
-# Check common locations for the generator script
+echo "[$(date +%T)] [3/5] Generating Training Data (History)..."
 GEN_SCRIPT=""
 if [ -f "generate_training_data.py" ]; then GEN_SCRIPT="generate_training_data.py"; fi
 if [ -f "data_generation/generate_training_data.py" ]; then GEN_SCRIPT="data_generation/generate_training_data.py"; fi
@@ -111,10 +114,9 @@ else
     echo "⚠️ generate_training_data.py not found. Skipping data generation."
 fi
 
-# --- 6. Feature Engineering ---
+# --- 6. Feature Engineering (Step 4 - Moved DOWN) ---
 echo ""
-echo "[4/5] Creating Feature Engineering Views..."
-# This creates 'stats_per_minute' view based on the schema of fact_game_events
+echo "[$(date +%T)] [4/5] Creating Feature Engineering Views..."
 if [ -f "feature_engineering.py" ]; then
     python3 feature_engineering.py --project_id "$PROJECT_ID"
 else
@@ -123,7 +125,7 @@ fi
 
 # --- 7. Deploy Pipeline ---
 echo ""
-echo "[5/5] Pipeline Deployment..."
+echo "[$(date +%T)] [5/5] Pipeline Deployment..."
 PIPELINE_SCRIPT="pubsub_to_bigquery.py"
 
 if [ ! -f "$PIPELINE_SCRIPT" ]; then
@@ -133,7 +135,7 @@ else
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]
     then
-        echo "Deploying Dataflow Pipeline..."
+        echo "[$(date +%T)] Deploying Dataflow Pipeline..."
         
         if ! gcloud storage ls gs://$GCS_STAGING_BUCKET > /dev/null 2>&1; then
             echo "🪣 Creating Staging Bucket: gs://$GCS_STAGING_BUCKET"
@@ -155,14 +157,12 @@ else
     fi
 fi
 
-
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
 echo ""
-echo "========================================================="
-echo "    SETUP COMPLETE                                       "
+echo "=========================================="
+echo "    SETUP COMPLETE"
 echo "    Total Time: $(($DURATION / 60))m $(($DURATION % 60))s"
-echo "========================================================="
-
+echo "=========================================="
 
