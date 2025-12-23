@@ -1,70 +1,141 @@
+import argparse
+import os
+import subprocess
 from google.cloud import aiplatform
 from google.cloud import storage
-import os
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
-project_id = "cloud-sa-ml"   # ⚠️ REPLACE
-bucket_name = "eve-online-model-bucket" # ⚠️ REPLACE (Must exist!)
-location = "us-central1"
-model_display_name = "game_health_autoencoder_v1"
-local_model_path = "game_health_autoencoder"
-# ==========================================
+# --- Configuration ---
+REGION = "us-central1"
+MODEL_DISPLAY_NAME = "eve-game-security-ae"
+ENDPOINT_DISPLAY_NAME = "eve-live-detect-endpoint"
+ARTIFACT_DIR = "model_artifacts" # Local folder from step 1
+MODEL_BUCKET = "eve-online-model-bucket"
 
-def upload_folder_to_gcs(bucket_name, source_folder, destination_blob_prefix):
-    """Uploads a local directory to GCS."""
-    storage_client = storage.Client(project=project_id)
-    bucket = storage_client.bucket(bucket_name)
-
-    print(f"⬆️ Uploading '{source_folder}' to gs://{bucket_name}/{destination_blob_prefix}...")
+def upload_local_directory_to_gcs(local_path, bucket_name, gcs_path):
+    """Recursively uploads a directory to GCS."""
+    storage_client = storage.Client()
     
-    for root, dirs, files in os.walk(source_folder):
-        for filename in files:
-            local_path = os.path.join(root, filename)
-            relative_path = os.path.relpath(local_path, source_folder)
-            blob_path = os.path.join(destination_blob_prefix, relative_path)
+    # Create bucket if it doesn't exist
+    try:
+        bucket = storage_client.get_bucket(bucket_name)
+    except Exception:
+        print(f"🪣 Creating bucket: {bucket_name}...")
+        bucket = storage_client.create_bucket(bucket_name, location=REGION)
+
+    print(f"📤 Uploading {local_path} to gs://{bucket_name}/{gcs_path}...")
+    
+    for root, _, files in os.walk(local_path):
+        for file in files:
+            local_file_path = os.path.join(root, file)
+            # Calculate relative path to maintain structure
+            relative_path = os.path.relpath(local_file_path, local_path)
+            blob_path = os.path.join(gcs_path, relative_path)
             
             blob = bucket.blob(blob_path)
-            blob.upload_from_filename(local_path)
+            blob.upload_from_filename(local_file_path)
+            
+    print("✅ Upload complete.")
+    return f"gs://{bucket_name}/{gcs_path}"
 
-    return f"gs://{bucket_name}/{destination_blob_prefix}"
+def grant_bucket_access_to_vertex_sa(project_id, bucket_name):
+    """
+    Grants the Vertex AI Service Agent permission to read from the SPECIFIC GCS bucket.
+    Uses Bucket-Level IAM via Python Client to avoid Project-Level conditional policy conflicts.
+    """
+    print(f"🔑 Granting Storage Object Viewer on gs://{bucket_name} to Vertex AI Service Agent...")
+    try:
+        # 1. Get Project Number (needed to construct SA email)
+        project_number = subprocess.check_output(
+            f"gcloud projects describe {project_id} --format='value(projectNumber)'", 
+            shell=True
+        ).decode().strip()
+        
+        vertex_sa = f"service-{project_number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
+        
+        # 2. Update Bucket IAM Policy (Native Python, no gcloud CLI)
+        storage_client = storage.Client(project=project_id)
+        bucket = storage_client.bucket(bucket_name)
+        
+        policy = bucket.get_iam_policy(requested_policy_version=3)
+        
+        role = "roles/storage.objectViewer"
+        member = f"serviceAccount:{vertex_sa}"
+        
+        # Add binding if not present
+        binding_exists = False
+        for binding in policy.bindings:
+            if binding["role"] == role and member in binding["members"]:
+                binding_exists = True
+                break
+        
+        if not binding_exists:
+            policy.bindings.append({"role": role, "members": [member]})
+            bucket.set_iam_policy(policy)
+            print(f"✅ Permission granted to {vertex_sa} on bucket {bucket_name}")
+        else:
+            print(f"ℹ️ Permission already exists for {vertex_sa}")
+            
+    except Exception as e:
+        print(f"⚠️ Could not automatically grant IAM permissions: {e}")
+        print("Please manually ensure the Vertex AI Service Agent has 'Storage Object Viewer' on the bucket.")
 
-def deploy_to_vertex():
-    aiplatform.init(project=project_id, location=location)
+def deploy_to_vertex(project_id, staging_bucket):
+    # 1. Upload Model Artifacts (Creates bucket if needed)
+    local_model_path = os.path.join(ARTIFACT_DIR, "saved_model")
+    if not os.path.exists(local_model_path):
+        raise FileNotFoundError(f"❌ Could not find {local_model_path}. Did you run training?")
+        
+    artifact_uri = upload_local_directory_to_gcs(
+        local_model_path, 
+        MODEL_BUCKET, 
+        "game_security_model"
+    )
 
-    # 1. Upload Artifacts to GCS
-    gcs_model_uri = upload_folder_to_gcs(bucket_name, local_model_path, "models/game_health")
+    # 2. Fix IAM Permissions (Bucket Level)
+    # Must happen AFTER bucket creation
+    grant_bucket_access_to_vertex_sa(project_id, MODEL_BUCKET)
 
-    # 2. Register Model in Vertex AI
-    print("\n®️ Registering model in Vertex AI...")
+    # 3. Initialize Vertex AI
+    aiplatform.init(project=project_id, location=REGION, staging_bucket=staging_bucket)
+
+    print(f"🚀 Starting Vertex AI Deployment for {project_id}...")
+
+    # 4. Upload Model
+    # We use the pre-built TensorFlow container
+    print("4. Registering model in Vertex AI...")
     model = aiplatform.Model.upload(
-        display_name=model_display_name,
-        artifact_uri=gcs_model_uri,
+        display_name=MODEL_DISPLAY_NAME,
+        artifact_uri=artifact_uri,
         serving_container_image_uri="us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-12:latest",
     )
-    print(f"✅ Model Uploaded: {model.resource_name}")
+    
+    # 5. Create Endpoint
+    print("5. Creating Endpoint (this takes ~5-10 mins)...")
+    endpoint = aiplatform.Endpoint.create(display_name=ENDPOINT_DISPLAY_NAME)
 
-    # 3. Create Endpoint
-    print("\n🔌 Creating Endpoint (This takes ~1-2 mins)...")
-    endpoint = aiplatform.Endpoint.create(display_name=f"{model_display_name}_endpoint")
-    print(f"✅ Endpoint Created: {endpoint.resource_name}")
-
-    # 4. Deploy Model
-    print("\n🚀 Deploying Model to Endpoint (This takes ~10-15 mins)...")
+    # 6. Deploy Model to Endpoint
+    print("6. Deploying Model to Endpoint...")
     model.deploy(
         endpoint=endpoint,
         machine_type="n1-standard-2",
         min_replica_count=1,
         max_replica_count=1
     )
+
+    print("✅ Deployment Complete!")
+    print(f"Endpoint ID: {endpoint.name}")
+    print(f"Resource Name: {endpoint.resource_name}")
     
-    print("\n🎉 DEPLOYMENT COMPLETE!")
-    print("------------------------------------------------")
-    print(f"ENDPOINT ID: {endpoint.name}")
-    print("------------------------------------------------")
-    print(f"👉 Copy this ID into 'agent_realtime_sec.py' as 'endpoint_id'")
+    # Save Endpoint ID for the Agent to use
+    with open("endpoint_config.txt", "w") as f:
+        f.write(endpoint.resource_name)
 
 if __name__ == "__main__":
-    deploy_to_vertex()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project_id", required=True)
+    parser.add_argument("--staging_bucket", required=True)
+    args = parser.parse_args()
+
+    deploy_to_vertex(args.project_id, args.staging_bucket)
+
 
