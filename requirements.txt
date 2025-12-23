@@ -1,10 +1,29 @@
-# Machine Learning Framework
-tensorflow==2.16.1  # Core library for Keras and Model training
+# --- Core Google Cloud Infrastructure ---
 
-# Data Handling
+google-cloud-bigquery>=3.13.0  # To fetch training data and run BQML
+google-cloud-storage>=2.10.0   # For staging Dataflow and ML artifacts
+google-cloud-pubsub>=2.18.0    # For real-time telemetry ingestion
+google-cloud-aiplatform>=1.38.0 # For deploying Vertex AI Endpoints
+
+# --- Data Processing & Handling ---
+
 pandas>=2.0.0       # For DataFrame manipulation
 numpy>=1.24.0       # For numerical operations and array normalization
+db-dtypes>=1.2.0    # Required by Pandas to read BigQuery results correctly
 
-# Google Cloud Integration
-google-cloud-bigquery>=3.13.0  # To fetch training data from BigQuery
-db-dtypes>=1.2.0               # Required by Pandas to read BigQuery results correctly
+# --- Machine Learning (Approach 2) ---
+
+tensorflow>=2.16.1  # Core library for Keras and Model training
+
+# --- GenAI & Agents ---
+
+google-generativeai>=0.3.0 # For native Gemini API
+google-adk>=0.1.0          # Google Agent Development Kit
+
+#--- Dataflow ---
+
+#(Optional - usually pre-installed in Cloud Shell, but good to have)
+
+apache-beam[gcp]>=2.50.0
+
+
