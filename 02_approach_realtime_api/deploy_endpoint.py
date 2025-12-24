@@ -1,6 +1,7 @@
 import argparse
 import os
 import subprocess
+import time
 from google.cloud import aiplatform
 from google.cloud import storage
 
@@ -80,7 +81,12 @@ def grant_bucket_access_to_vertex_sa(project_id, bucket_name):
         print("Please manually ensure the Vertex AI Service Agent has 'Storage Object Viewer' on the bucket.")
 
 def deploy_to_vertex(project_id, staging_bucket):
+    total_start_time = time.time()
+
     # 1. Upload Model Artifacts (Creates bucket if needed)
+    print(f"\n[⏱️ {time.strftime('%H:%M:%S')}] Step 1: Uploading Model Artifacts...")
+    step_start = time.time()
+    
     local_model_path = os.path.join(ARTIFACT_DIR, "saved_model")
     if not os.path.exists(local_model_path):
         raise FileNotFoundError(f"❌ Could not find {local_model_path}. Did you run training?")
@@ -90,39 +96,53 @@ def deploy_to_vertex(project_id, staging_bucket):
         MODEL_BUCKET, 
         "game_security_model"
     )
+    print(f"   Duration: {time.time() - step_start:.1f}s")
 
     # 2. Fix IAM Permissions (Bucket Level)
+    print(f"\n[⏱️ {time.strftime('%H:%M:%S')}] Step 2: Fixing IAM Permissions...")
+    step_start = time.time()
     # Must happen AFTER bucket creation
     grant_bucket_access_to_vertex_sa(project_id, MODEL_BUCKET)
+    print(f"   Duration: {time.time() - step_start:.1f}s")
 
     # 3. Initialize Vertex AI
+    print(f"\n[⏱️ {time.strftime('%H:%M:%S')}] Step 3: Initializing Vertex AI SDK...")
+    step_start = time.time()
     aiplatform.init(project=project_id, location=REGION, staging_bucket=staging_bucket)
+    print(f"   Duration: {time.time() - step_start:.1f}s")
 
     print(f"🚀 Starting Vertex AI Deployment for {project_id}...")
 
     # 4. Upload Model
     # We use the pre-built TensorFlow container
-    print("4. Registering model in Vertex AI...")
+    print(f"\n[⏱️ {time.strftime('%H:%M:%S')}] Step 4: Registering model in Vertex AI Model Registry...")
+    step_start = time.time()
     model = aiplatform.Model.upload(
         display_name=MODEL_DISPLAY_NAME,
         artifact_uri=artifact_uri,
         serving_container_image_uri="us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-12:latest",
     )
+    print(f"✅ Model Registered. Duration: {time.time() - step_start:.1f}s")
     
     # 5. Create Endpoint
-    print("5. Creating Endpoint (this takes ~5-10 mins)...")
+    print(f"\n[⏱️ {time.strftime('%H:%M:%S')}] Step 5: Creating Endpoint (this takes ~5-10 mins)...")
+    step_start = time.time()
     endpoint = aiplatform.Endpoint.create(display_name=ENDPOINT_DISPLAY_NAME)
+    print(f"✅ Endpoint Created. Duration: {time.time() - step_start:.1f}s")
 
     # 6. Deploy Model to Endpoint
-    print("6. Deploying Model to Endpoint...")
+    print(f"\n[⏱️ {time.strftime('%H:%M:%S')}] Step 6: Deploying Model to Endpoint (this also takes time)...")
+    step_start = time.time()
     model.deploy(
         endpoint=endpoint,
         machine_type="n1-standard-2",
         min_replica_count=1,
         max_replica_count=1
     )
+    print(f"✅ Model Deployed. Duration: {time.time() - step_start:.1f}s")
 
-    print("✅ Deployment Complete!")
+    total_duration = time.time() - total_start_time
+    print(f"\n✅ Deployment Complete! Total Time: {int(total_duration // 60)}m {int(total_duration % 60)}s")
     print(f"Endpoint ID: {endpoint.name}")
     print(f"Resource Name: {endpoint.resource_name}")
     
@@ -137,5 +157,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     deploy_to_vertex(args.project_id, args.staging_bucket)
-
 
