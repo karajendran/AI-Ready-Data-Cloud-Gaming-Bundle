@@ -29,8 +29,24 @@ This repository contains the infrastructure-as-code, data pipeline, and simulati
 
 ## Setup Workflow
 
-### Step 1: Data Preparation (The Notebook)
-**You must run this first.**
+### Step 1: Data Preparation (The Notebook) **You must run this first.**
+
+
+Confirm you have a network/subnetwork configured in your GCP project and if not, create one before running the notebook.
+```bash
+    export REGION=us-central1 \
+
+    gcloud compute networks create default --subnet-mode=auto \
+
+    gcloud compute networks subnets update default --region=us-central1 --enable-private-ip-google-access \
+
+    gcloud compute firewall-rules create allow-internet-egress --network=default --action=ALLOW --direction=EGRESS --rules=all --destination-ranges=0.0.0.0/0 \
+
+    gcloud compute routers create colab-router --network=default --region=${REGION} \
+
+    gcloud compute routers nats create colab-nat-config --router=colab-router --region=${REGION}  --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges 
+```
+
 Open `eve_online_eda_with_visualization.ipynb` in Google Colab or a local Jupyter environment.
 1.  Set your `PROJECT_ID` and `BUCKET_NAME` in the configuration cell.
 2.  Run all cells.
