@@ -73,7 +73,7 @@ gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/pubsub.subscriber" --condition=None > /dev/null 2>&1 || true
 gcloud projects add-iam-policy-binding $PROJECT_ID --member="serviceAccount:$SA_EMAIL" --role="roles/storage.objectAdmin" --condition=None > /dev/null 2>&1 || true
 
-# --- FIX: Wait for IAM Propagation ---
+# --- Wait for IAM Propagation ---
 echo "[$(date +%T)] ⏳ Sleeping 60s to allow IAM permissions to propagate..."
 sleep 60
 echo "[$(date +%T)] ✅ IAM Propagation likely complete."
@@ -100,7 +100,7 @@ python3 "${PATH_PREFIX}provision_streaming_infra.py" \
     --project_id "$PROJECT_ID" \
     --region "$REGION"
 
-# --- 5. Data Generation (Step 3 - Moved UP) ---
+# --- 5. Data Generation ---
 echo ""
 echo "[$(date +%T)] [3/5] Generating Training Data (History)..."
 GEN_SCRIPT=""
@@ -114,7 +114,7 @@ else
     echo "⚠️ generate_training_data.py not found. Skipping data generation."
 fi
 
-# --- 6. Feature Engineering (Step 4 - Moved DOWN) ---
+# --- 6. Feature Engineering ---
 echo ""
 echo "[$(date +%T)] [4/5] Creating Feature Engineering Views..."
 if [ -f "feature_engineering.py" ]; then
