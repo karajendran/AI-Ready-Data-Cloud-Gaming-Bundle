@@ -55,10 +55,36 @@ echo "✅ Configuration synced."
 # --- STEP 4: RUN AGENT ---
 echo ""
 echo "[4/4] 🕵️  Running Real-Time Security Agent..."
-python3 02_approach_realtime_api/run_realtime_agent.py
+echo "      (Type 'exit' to quit)"
+echo "---------------------------------------------------"
+
+# Check if ADK is installed
+if ! pip show google-adk > /dev/null 2>&1; then
+    echo "⚠️  Google ADK not found. Installing..."
+    pip install google-adk
+fi
+
+# Check for agent directory
+if [ ! -d "adk_agent" ]; then
+    echo "❌ Error: 'adk_agent/' directory not found."
+    exit 1
+fi
+
+# --- DYNAMIC CONFIGURATION ---
+# We write the .env file dynamically to ensure it matches the CLI argument
+echo "📝 Configuring adk_agent/.env for Project: $PROJECT_ID..."
+cat > adk_agent/.env <<EOF
+GOOGLE_GENAI_USE_VERTEXAI=TRUE
+GOOGLE_CLOUD_PROJECT=$PROJECT_ID
+GOOGLE_CLOUD_LOCATION=us-central1
+EOF
+
+# Run using the ADK CLI
+# The CLI will automatically pick up the .env we just wrote
+adk run adk_agent
 
 echo ""
-echo "=================================================="
-echo "   🎉 DEMO COMPLETE"
-echo "=================================================="
-
+echo "=========================================="
+echo "    ✅ DEMO COMPLETE"
+echo "=========================================="
+echo ""
