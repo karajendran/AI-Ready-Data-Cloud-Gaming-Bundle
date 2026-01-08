@@ -47,20 +47,26 @@ Philosophy: "Bring the AI to the Data." We run unsupervised clustering directly 
 Follow these commands to provision, run the demo, and teardown resources.
 
 ```
+# 0. Configuration
+export PROJECT_ID="your-project-id" 
+export GCS_BUCKET_NAME="your-bucket-name"
+
 # 1. Setup (Infrastructure & Data)
+gcloud auth application-default login
 cd infra_provisioning/
 chmod +x setup_demo.sh
-./setup_demo.sh <PROJECT_ID> <GCS_BUCKET_NAME>
+./setup_demo.sh ${PROJECT_ID} ${GCS_BUCKET_NAME}
 
 # 2. Run Demo (Model & Agent)
 cd ../01_approach_batch_bqml/
 chmod +x run_demo.sh
-./run_demo.sh <PROJECT_ID>
+./run_demo.sh ${PROJECT_ID}
 
 # 3. Teardown (Cleanup)
 cd ../infra_provisioning/
 chmod +x teardown_demo.sh
-./teardown_demo.sh <PROJECT_ID> <GCS_BUCKET_NAME>
+./teardown_demo.sh ${PROJECT_ID} ${GCS_BUCKET_NAME}
+cd ..
 
 ```
 
