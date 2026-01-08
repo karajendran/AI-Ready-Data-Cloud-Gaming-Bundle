@@ -13,7 +13,18 @@ This repository contains the infrastructure-as-code, data pipeline, and simulati
     ```bash
     pip install google-cloud-bigquery google-cloud-storage google-cloud-pubsub apache-beam[gcp]
     ```
-
+4. **Enable APIs**:
+    ```bash
+    gcloud services enable \
+    dataflow.googleapis.com \
+    compute.googleapis.com \
+    logging.googleapis.com \
+    storage-component.googleapis.com \
+    bigquery.googleapis.com \
+    pubsub.googleapis.com \
+    aiplatform.googleapis.com \
+    iam.googleapis.com
+    ```
 ---
 
 ## Setup Workflow
