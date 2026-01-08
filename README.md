@@ -28,7 +28,7 @@ We provide two implementation approaches depending on your latency and complexit
 
 Clone the repo:
 ```
-git clone [https://github.com/your-org/data-cloud-games.git](https://github.com/your-org/data-cloud-games.git)
+git clone https://github.com/karajendran/AI-Ready-Data-Cloud-Gaming-Bundle.git
 cd AI-Ready-Data-Cloud-Gaming-Bundle
 ```
 
