@@ -37,20 +37,7 @@ Install Dependencies (Shared):
 pip install -r requirements.txt
 ```
 
-**Global Configuration:**
-Edit the `project_id` and `location` variables in the Python scripts before running.
-
-## 4. Common Foundation (Data Engineering)
-
-Located in: *00_common_data_engineering/*
-
-Before running either approach, you must establish the Feature Store.
-1. Open BigQuery Console.
-2. Run `feature_store_setup.sql`.
-    * Input: `eve_data_demo.game_events` (Raw Stream)
-    * Output: `eve_data_demo.stats_per_minute` (Aggregated Behavioral Vectors)
-
-## 5. Run Approach 1: Batch Analytics (BQML)
+## 4. Run Approach 1: Batch Analytics (BQML)
 
 Located in: *01_approach_batch_bqml/*
 Philosophy: "Bring the AI to the Data." We run unsupervised clustering directly inside the Data Warehouse.
@@ -78,7 +65,10 @@ chmod +x teardown_demo.sh
 ```
 
 
-## 6. Run Approach 2: Real-Time Detection (Vertex AI)
+## 5. Run Approach 2: Real-Time Detection (Vertex AI)
+
+**Global Configuration:**
+Edit the `project_id` and `location` variables in the Python scripts before running.
 
 Located in: *02_approach_realtime_api/*
 
@@ -102,7 +92,7 @@ python 02_approach_realtime_api/agent_realtime_sec.py
 ```
 
 
-## 7. Troubleshooting
+## 6. Troubleshooting
 * Error: 404 NotFound or Dataset not found
     * Fix: Ensure your project_id is correct and you have run the SQL in 00_common_data_engineering to create the views.
 * Error: avg_price is null (Approach 2)
