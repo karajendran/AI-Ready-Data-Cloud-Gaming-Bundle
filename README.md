@@ -79,30 +79,40 @@ cd ..
 
 ## 5. Run Approach 2: Real-Time Detection (Vertex AI)
 
-**Global Configuration:**
-Edit the `project_id` and `location` variables in the Python scripts before running.
+### End-to-End Execution Guide
 
-Located in: *02_approach_realtime_api/*
+Follow these commands to provision, run the demo, and teardown resources.
 
-**Philosophy:** "Production ML Engineering." We train a Neural Network (Autoencoder) and deploy it as a low-latency microservice.
-1. Train the Autoencoder: Fetches data from BigQuery, trains a TensorFlow model locally, and saves the artifact.
-```
-python 02_approach_realtime_api/train_autoencoder.py
-```
-
-2. Deploy to Cloud (MLOps):
-Uploads the model to GCS and provisions a Vertex AI Endpoint.
-```
-python 02_approach_realtime_api/deploy_endpoint.py
+``` bash
+# 0. Configuration
+export PROJECT_ID="your-project-id" 
+export GCS_BUCKET_NAME="your-bucket-name"
+export DATAFLOW-STAGING_BUCKET_NAME="your-dataflow-staging-bucket-name"
 ```
 
-Note: Take note of the `ENDPOINT_ID` printed at the end.
-Run the Agent:
-Update the script with your `ENDPOINT_ID`. The Agent will fetch live stats and "ping" the neural network for a sub-second verdict.
-```
-python 02_approach_realtime_api/agent_realtime_sec.py
+``` bash
+# 1. Setup (Infrastructure & Data)
+gcloud auth application-default login
+cd infra_provisioning/
+chmod +x setup_demo.sh
+./setup_demo.sh ${PROJECT_ID} ${GCS_BUCKET_NAME}
 ```
 
+``` bash
+# 2. Run Demo (Model & Agent)
+cd ../02_approach_realtime_api/
+chmod +x run_demo.sh
+./run_demo.sh <PROJECT_ID> <DATAFLOW-STAGING_BUCKET_NAME>
+```
+
+``` bash
+# 3. Teardown (Cleanup)
+cd ../infra_provisioning/
+chmod +x teardown_demo.sh
+./teardown_demo.sh ${PROJECT_ID} ${GCS_BUCKET_NAME}
+cd ..
+
+```
 
 ## 6. Troubleshooting
 * Error: 404 NotFound or Dataset not found
