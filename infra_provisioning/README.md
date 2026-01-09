@@ -32,17 +32,17 @@ This repository contains the infrastructure-as-code, data pipeline, and simulati
 ### Step 1: Data Preparation (The Notebook) **You must run this first.**
 
 
-Confirm you have a network/subnetwork configured in your GCP project and if not, create one before running the notebook.
+This can be run from Colab Enterprise in the Google Cloud console or a local Jupyter environment.  If you choose to use Colab, confirm you have a network/subnetwork configured in your GCP project and if not, create one before running the notebook.
 ```bash
-    export REGION=us-central1 \
+    export REGION=us-central1 # update as necessary
 
-    gcloud compute networks create default --subnet-mode=auto \
+    gcloud compute networks create default --subnet-mode=auto
 
-    gcloud compute networks subnets update default --region=us-central1 --enable-private-ip-google-access \
+    gcloud compute networks subnets update default --region=${REGION} --enable-private-ip-google-access
 
-    gcloud compute firewall-rules create allow-internet-egress --network=default --action=ALLOW --direction=EGRESS --rules=all --destination-ranges=0.0.0.0/0 \
+    gcloud compute firewall-rules create allow-internet-egress --network=default --action=ALLOW --direction=EGRESS --rules=all --destination-ranges=0.0.0.0/0
 
-    gcloud compute routers create colab-router --network=default --region=${REGION} \
+    gcloud compute routers create colab-router --network=default --region=${REGION}
 
     gcloud compute routers nats create colab-nat-config --router=colab-router --region=${REGION}  --auto-allocate-nat-external-ips --nat-all-subnet-ip-ranges 
 ```
@@ -74,3 +74,16 @@ chmod +x teardown_demo.sh
 ./teardown_demo.sh <YOUR_PROJECT_ID> <YOUR_BUCKET_NAME>
 ```
 
+If you created a default network so you could run the notebook from step 1 in Google Cloud Colab Enterprise and don't have need for the network anymore, these commands can be used to delete those resources as well:
+```bash
+export REGION=us-central1
+
+# Warning: Ensure no other resources (like VMs) are using this network configuration before deleting.
+gcloud compute routers nats delete colab-nat-config --router=colab-router --region=${REGION} --quiet
+
+gcloud compute routers delete colab-router --region=${REGION} --quiet
+
+gcloud compute firewall-rules delete allow-internet-egress --quiet
+
+gcloud compute networks delete default --quiet
+```
